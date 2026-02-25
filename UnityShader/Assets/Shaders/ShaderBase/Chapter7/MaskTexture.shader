@@ -1,4 +1,4 @@
-Shader "Custom/MaskTexture"
+Shader "Custom/ShaderBase/Chapter7/MaskTexture"
 {
     Properties
     {

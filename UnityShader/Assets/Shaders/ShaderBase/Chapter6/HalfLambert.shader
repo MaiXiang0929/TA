@@ -1,4 +1,4 @@
-Shader "Custom/Chapter6-HalfLambert"
+Shader "Custom/ShaderBase/Chapter6/HalfLambert"
 {
     Properties
     {

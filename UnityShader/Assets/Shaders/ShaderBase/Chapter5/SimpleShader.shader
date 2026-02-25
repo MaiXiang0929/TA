@@ -1,7 +1,7 @@
 // Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
 
 
-Shader "Custom/Chapter5/SimpleShader"
+Shader "Custom/ShaderBase/Chapter5/SimpleShader"
 {
     Properties
     {
@@ -74,4 +74,5 @@ Shader "Custom/Chapter5/SimpleShader"
             ENDHLSL
         }
     }
+    FallBack "Universal Render Pipeline/Unlit"
 }

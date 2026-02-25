@@ -1,6 +1,6 @@
 // Upgrade NOTE: replaced '_World2Object' with 'unity_WorldToObject'
 
-Shader "Custom/Chapter6-DiffusePixelLevel"
+Shader "Custom/ShaderBase/Chapter6/DiffusePixelLevel"
 {
      Properties
     {

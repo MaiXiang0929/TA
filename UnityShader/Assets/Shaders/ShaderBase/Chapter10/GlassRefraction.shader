@@ -1,4 +1,4 @@
-Shader "Custom/GlassRefraction"
+Shader "Custom/ShaderBase/Chapter10/GlassRefraction"
 {
     Properties
     {

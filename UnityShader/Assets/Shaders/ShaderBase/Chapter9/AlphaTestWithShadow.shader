@@ -1,4 +1,4 @@
-Shader "Custom/AlphaTestWithShadow"
+Shader "Custom/ShaderBase/Chapter9/AlphaTestWithShadow"
 {
     Properties
     {

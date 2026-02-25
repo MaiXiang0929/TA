@@ -1,4 +1,4 @@
-Shader "Custom/AlphaBlendZWrite"
+Shader "Custom/ShaderBase/Chapter8/AlphaBlendZWrite"
 {
     Properties
     {

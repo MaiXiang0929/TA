@@ -1,4 +1,4 @@
-Shader "Custom/AlphaBlendBothSided"
+Shader "Custom/ShaderBase/Chapter8/AlphaBlendBothSided"
 {
     Properties
     {

@@ -1,4 +1,4 @@
-Shader "Custom/Refraction"
+Shader "Custom/ShaderBase/Chapter10/Refraction"
 {
     Properties
     {

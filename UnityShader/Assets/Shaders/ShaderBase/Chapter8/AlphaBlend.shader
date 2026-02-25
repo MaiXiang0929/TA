@@ -1,4 +1,4 @@
-Shader "Custom/AlphaBlend"
+Shader "Custom/ShaderBase/Chapter8/AlphaBlend"
 {
     Properties
     {

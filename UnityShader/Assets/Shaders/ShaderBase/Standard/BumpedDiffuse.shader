@@ -1,4 +1,4 @@
-Shader "Custom/BumpedDiffuse"
+Shader "Custom/ShaderBase/Standard/BumpedDiffuse"
 {
     Properties
     {

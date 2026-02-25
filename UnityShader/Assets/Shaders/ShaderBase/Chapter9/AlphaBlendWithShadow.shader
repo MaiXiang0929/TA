@@ -1,4 +1,4 @@
-Shader "Custom/AlphaBlendWithShadow"
+Shader "Custom/ShaderBase/Chapter9/AlphaBlendWithShadow"
 {
     Properties
     {

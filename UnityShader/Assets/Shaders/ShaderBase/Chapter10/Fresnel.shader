@@ -1,4 +1,4 @@
-Shader "Custom/Fresnel"
+Shader "Custom/ShaderBase/Chapter10/Fresnel"
 {
     Properties
     {

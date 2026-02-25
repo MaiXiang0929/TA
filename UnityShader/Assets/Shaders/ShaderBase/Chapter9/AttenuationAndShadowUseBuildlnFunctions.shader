@@ -1,4 +1,4 @@
-Shader "Custom/AttenuationAndShadowUseBuildlnFunctions"
+Shader "Custom/ShaderBase/Chapter9/AttenuationAndShadowUseBuildlnFunctions"
 {
     Properties
     {

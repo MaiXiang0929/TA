@@ -1,4 +1,4 @@
-Shader "Custom/Shadow"
+Shader "Custom/ShaderBase/Chapter9/Shadow"
 {
     Properties
     {

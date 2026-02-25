@@ -1,4 +1,4 @@
-Shader "Custom/BumpedSpecular"
+Shader "Custom/ShaderBase/Standard/BumpedSpecular"
 {
     Properties
     {

@@ -1,6 +1,6 @@
 // Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
 
-Shader "Custom/SingleTexture"
+Shader "Custom/ShaderBase/Chapter7/SingleTexture"
 {
     Properties
     {

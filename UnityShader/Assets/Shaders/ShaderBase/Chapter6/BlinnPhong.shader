@@ -1,4 +1,4 @@
-Shader "Custom/Chapter6/BlinnPhong"
+Shader "Custom/ShaderBase/Chapter6/BlinnPhong"
 {
     Properties
     {
@@ -16,7 +16,7 @@ Shader "Custom/Chapter6/BlinnPhong"
 
         Pass
         {
-            Name "BlinnPhong"
+            Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward"}
 
             HLSLPROGRAM
@@ -24,52 +24,75 @@ Shader "Custom/Chapter6/BlinnPhong"
             #pragma vertex vert
             #pragma fragment frag
 
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
-                fixed4 _Diffuse;
-                fixed4 _Specular;
+                float4 _Diffuse;
+                float4 _Specular;
                 float _Gloss;
             CBUFFER_END
             
-            struct a2v{
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
+            struct Attributes{
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
             };
 
-            struct v2f{
-                float4 pos : SV_POSITION;
-                float3 worldNormal : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
+            struct Varyings{
+                float4 positionCS : SV_POSITION;
+                float3 normalWS : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
                 };
 
-            v2f vert(a2v v){
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
+            Varyings vert(Attributes input)
+            {
+                Varyings output;
 
-                o.worldNormal = mul(v.normal, (float3x3)unity_WorldToObject);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                // 将顶点从对象空间变换到裁剪空间
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                
+                // 将法线从对象空间变换到世界空间
+                output.normalWS = TransformObjectToWorldNormal(input.normalOS);
+                
+                // 计算世界空间位置
+                output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                
+                return output;
+            }
 
-                return o;
-                }
-
-            fixed4 frag(v2f i) : SV_Target{
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
-
-                fixed3 worldNormal = normalize(i.worldNormal);
-                fixed3 worldLightDir = normalize(_WorldSpaceLightPos0.xyz);
-
-                fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * saturate(dot(worldNormal, worldLightDir));
-
-                fixed3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.worldPos.xyz);
-                fixed3 halfDir = normalize(viewDir + worldLightDir);
-                fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(max(0,dot(worldNormal,halfDir)), _Gloss);
-
-                return fixed4(ambient + diffuse + specular, 1.0);
-                }
+             half4 frag(Varyings input) : SV_Target
+            {
+                // 环境光
+                half3 ambient = unity_AmbientSky.rgb;
+                
+                // 归一化法线
+                half3 normalWS = normalize(input.normalWS);
+                
+                // 获取主光源信息
+                Light mainLight = GetMainLight();
+                half3 lightColor = mainLight.color;
+                half3 lightDirWS = normalize(mainLight.direction);
+                
+                // 漫反射 (Lambert)
+                half NdotL = saturate(dot(normalWS, lightDirWS));
+                half3 diffuse = lightColor * _Diffuse.rgb * NdotL;
+                
+                // 视线方向
+                half3 viewDirWS = normalize(_WorldSpaceCameraPos.xyz - input.positionWS);
+                
+                // Blinn-Phong高光：halfDir = viewDir + lightDir
+                half3 halfDir = normalize(viewDirWS + lightDirWS);
+                half specAngle = max(0, dot(normalWS, halfDir));
+                half3 specular = lightColor * _Specular.rgb * pow(specAngle, _Gloss);
+                
+                // 合并光照
+                half3 finalColor = ambient + diffuse + specular;
+                
+                return half4(finalColor, 1.0);
+            }
 
             ENDHLSL
         }
     }
-    FallBack "Specular"
+    FallBack "Universal Render Pipeline/Simple Lit"
 }

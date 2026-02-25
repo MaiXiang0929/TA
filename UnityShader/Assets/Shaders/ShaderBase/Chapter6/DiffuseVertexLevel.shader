@@ -1,6 +1,6 @@
 // Upgrade NOTE: replaced '_World2Object' with 'unity_WorldToObject'
 
-Shader "Custom/Chapter6-DiffuseVertexLevel"
+Shader "Custom/ShaderBase/Chapter6/DiffuseVertexLevel"
 {
     Properties
     {

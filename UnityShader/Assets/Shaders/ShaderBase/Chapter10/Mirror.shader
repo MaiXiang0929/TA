@@ -1,4 +1,4 @@
-Shader "Custom/Mirror"
+Shader "Custom/ShaderBase/Chapter10/Mirror"
 {
     Properties
     {

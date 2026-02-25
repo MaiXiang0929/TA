@@ -1,4 +1,4 @@
-Shader "Custom/FootprintLineBox"
+Shader "Custom/Practice/FootprintLineBox"
 {
     Properties
     {

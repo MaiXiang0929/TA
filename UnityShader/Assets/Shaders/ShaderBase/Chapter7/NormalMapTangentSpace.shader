@@ -1,4 +1,4 @@
-Shader "Custom/NormalMapTangentSpace"
+Shader "Custom/ShaderBase/Chapter7/NormalMapTangentSpace"
 {
     Properties
     {

@@ -1,4 +1,4 @@
-﻿Shader "Custom/HalftoneShader"
+﻿Shader "Custom/Practice/HalftoneShader"
 {
     Properties
     {

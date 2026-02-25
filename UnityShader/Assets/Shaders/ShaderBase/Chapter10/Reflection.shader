@@ -1,4 +1,4 @@
-Shader "Custom/Reflection"
+Shader "Custom/ShaderBase/Chapter10/Reflection"
 {
     Properties
     {
