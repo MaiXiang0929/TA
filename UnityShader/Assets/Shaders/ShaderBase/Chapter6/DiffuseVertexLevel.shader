@@ -4,54 +4,77 @@ Shader "Custom/ShaderBase/Chapter6/DiffuseVertexLevel"
 {
     Properties
     {
-        _Diffuse ("Diffuse", color) = (1, 1, 1, 1)
+        _Diffuse ("Diffuse", Color) = (1, 1, 1, 1)
     }
     SubShader
     {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+        }
+
+        HLSLINCLUDE
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _Diffuse;
+            CBUFFER_END
+
+        ENDHLSL
+
         Pass 
         {
-            Tags { "LightMode"="ForwardBase" }
-
-            CGPROGRAM
+            Tags { "LightMode"="UniversalForward" }
+        
+            HLSLPROGRAM
         
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "Lighting.cginc"
+            struct Attributes 
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+            };
 
-            fixed4 _Diffuse;
-
-            struct a2v {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                };
-
-            struct v2f {
-                float4 pos : POSITION;
+            struct Varyings 
+            {
+                float4 positionCS : POSITION;
                 float3 color : COLOR;
-                };
+            };
 
-            v2f vert(a2v v) {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
+            Varyings vert(Attributes input) {
+                Varyings output;
+                
+                VertexPositionInputs posInputs = GetVertexPositionInputs(input.positionOS.xyz);
+                VertexNormalInputs normalInputs = GetVertexNormalInputs(input.normalOS);
+                
+                output.positionCS = posInputs.positionCS;
+                
+                // 逐顶点光照计算
+                half3 ambient = SampleSH(normalInputs.normalWS);
+                half3 normalWS = normalize(normalInputs.normalWS);
 
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
+                Light light = GetMainLight();
+                half3 lightDirWS = normalize(light.direction);
+                
+                half NdotL = saturate(dot(normalWS, lightDirWS));
+                half3 diffuse = light.color * _Diffuse.rgb * NdotL;
+                
+                output.color = ambient + diffuse;
 
-                fixed3 worldNormal = normalize(mul(v.normal, (float3x3)unity_WorldToObject));
-                fixed3 worldLight = normalize(_WorldSpaceLightPos0.xyz);
-                fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * saturate(dot(worldNormal, worldLight));
-
-                o.color = ambient + diffuse;
-
-                return o;
+                return output;
                 }
 
-            fixed4 frag(v2f i) : SV_Target {
-                return fixed4(i.color, 1.0);
+            half4 frag(Varyings input) : SV_Target {
+                return float4(input.color, 1.0);
                 }
 
-            ENDCG
+            ENDHLSL
         }
     }
-    FallBack "Diffuse"
+    FallBack "Universal Render Pipeline/Simple Lit"
 }
