@@ -139,7 +139,7 @@ Shader "Cel-Shading/ToonFace"
                     half mixValue = lerp(valueL, valueR, exposeRight); // 混合阴影强度
                     half sdfLeft = tex2D(_SDF, half2(1 - input.uv0.x, input.uv0.y)).r; // 左侧距离场
                     half sdfRight = tex2D(_SDF, input.uv0).r; // 右侧距离场
-                    half mixSdf = lerp(sdfLeft, sdfRight, exposeRight); // 采样SDF纹理
+                    half mixSdf = lerp(sdfRight, sdfLeft, exposeRight); // 采样SDF纹理
                     half sdf = step(mixValue, mixSdf); // 计算硬边界阴影
                     sdf = lerp(0, sdf, step(0, dot(LpHeadHorizon, headForwardDir))); // 计算右侧阴影
                     sdf *= shadowMask.g; // 使用G通道控制阴影强度
