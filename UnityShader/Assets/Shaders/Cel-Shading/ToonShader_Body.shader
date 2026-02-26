@@ -1,8 +1,8 @@
-Shader "Toon/Body"
+Shader "Cel-Shading/ToonBody"
 {
     Properties
     {
-        [Header(Texture)]
+        [Header(Textures)]
         _BaseMap ("Base Map", 2D) = "white" {}
         _LightMap ("Light Map", 2D) = "white" {}
         [Toggle(_USE_LIGHTMAP_AO)] _UseLightMapAO ("Use LightMap AO", Range(0, 1)) = 1 // AO开关

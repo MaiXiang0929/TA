@@ -14,6 +14,19 @@ Shader "Custom/ShaderBase/Chapter6/BlinnPhong"
             "RenderPipeline" = "UniversalPipeline"
         }
 
+        HLSLINCLUDE
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _Diffuse;
+                float4 _Specular;
+                float _Gloss;
+            CBUFFER_END
+
+        ENDHLSL
+
         Pass
         {
             Name "ForwardLit"
@@ -24,15 +37,6 @@ Shader "Custom/ShaderBase/Chapter6/BlinnPhong"
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-
-            CBUFFER_START(UnityPerMaterial)
-                float4 _Diffuse;
-                float4 _Specular;
-                float _Gloss;
-            CBUFFER_END
-            
             struct Attributes{
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;

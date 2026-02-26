@@ -16,6 +16,18 @@ Shader "Custom/ShaderBase/Chapter5/SimpleShader"
             "RenderPipeline" = "UniversalPipeline" 
         }
 
+        HLSLINCLUDE
+
+            // URP核心库
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            
+            // 材质属性声明在CBUFFER中（SRP Batcher兼容性）
+            CBUFFER_START(UnityPerMaterial)
+                float4 _Color;
+            CBUFFER_END
+
+        ENDHLSL
+
         Pass
         {
             Name "ForwardLit"
@@ -25,15 +37,7 @@ Shader "Custom/ShaderBase/Chapter5/SimpleShader"
             
             #pragma vertex vert
             #pragma fragment frag
-            
-            // URP核心库
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            
-            // 材质属性声明在CBUFFER中（SRP Batcher兼容性）
-            CBUFFER_START(UnityPerMaterial)
-                float4 _Color;
-            CBUFFER_END
-            
+               
             // 输入结构（原a2v）
             struct Attributes
             {
