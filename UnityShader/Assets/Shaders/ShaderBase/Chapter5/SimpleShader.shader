@@ -30,7 +30,6 @@ Shader "Custom/ShaderBase/Chapter5/SimpleShader"
 
         Pass
         {
-            Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }  // URP前向渲染
 
             HLSLPROGRAM
@@ -59,7 +58,9 @@ Shader "Custom/ShaderBase/Chapter5/SimpleShader"
                 Varyings output;
                 
                 // URP坐标转换：模型空间 → 裁剪空间
-                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                // position
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+                output.positionCS = vertexInput.positionCS;
                 
                 // 法线可视化（和原逻辑一致）
                 output.color = input.normalOS * 0.5 + float3(0.5, 0.5, 0.5);

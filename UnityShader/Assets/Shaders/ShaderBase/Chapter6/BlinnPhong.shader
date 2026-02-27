@@ -29,7 +29,6 @@ Shader "Custom/ShaderBase/Chapter6/BlinnPhong"
 
         Pass
         {
-            Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward"}
 
             HLSLPROGRAM

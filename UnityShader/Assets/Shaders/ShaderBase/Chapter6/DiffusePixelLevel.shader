@@ -4,55 +4,83 @@ Shader "Custom/ShaderBase/Chapter6/DiffusePixelLevel"
 {
      Properties
     {
-        _Diffuse ("Diffuse", color) = (1, 1, 1, 1)
+        _Diffuse ("Diffuse", Color) = (1, 1, 1, 1)
     }
     SubShader
     {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+        }
+
+        HLSLINCLUDE
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _Diffuse;
+            CBUFFER_END
+
+        ENDHLSL
+        
         Pass 
         {
-            Tags { "LightMode"="ForwardBase" }
+            Tags { "LightMode"="UniversalForward" }
 
-            CGPROGRAM
+            HLSLPROGRAM
         
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "Lighting.cginc"
+            struct Attributes 
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+            };
 
-            fixed4 _Diffuse;
+            struct Varyings 
+            {
+                float4 positionCS : SV_POSITION;
+                float3 normalWS : TEXCOORD0;
+            };
 
-            struct a2v {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                };
+            Varyings vert(Attributes input) 
+            {
+                Varyings output;
 
-            struct v2f {
-                float4 pos : POSITION;
-                float3 worldNormal : TEXCOORD0;
-                };
+               // position
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+                output.positionCS = vertexInput.positionCS;
 
-            v2f vert(a2v v) {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.worldNormal = mul(v.normal, (float3x3)unity_WorldToObject);
+                // normal
+                VertexNormalInputs vertexNormalInput = GetVertexNormalInputs(input.normalOS);
+                output.normalWS = vertexNormalInput.normalWS;
 
-                return o;
-                }
+                return output;
+            }
 
-            fixed4 frag(v2f i) : SV_Target {
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
-                fixed3 worldNormal = normalize(i.worldNormal);
-                fixed3 worldLightDir = normalize(_WorldSpaceLightPos0.xyz);
+            half4 frag(Varyings input) : SV_Target 
+            {
+                Light light = GetMainLight();
 
-                fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * saturate(dot(worldNormal, worldLightDir));
+                // Normalize Vector
+                half3 N = normalize(input.normalWS);
+                half3 L = normalize(light.direction);
+                half NoL = dot(N, L);
 
-                fixed3 color = ambient + diffuse;
+                half3 ambient = SampleSH(N);
 
-                return fixed4(color, 1.0);
-                }
+                half3 diffuse = light.color * _Diffuse.rgb * saturate(NoL);
 
-            ENDCG
+                half3 color = ambient + diffuse;
+
+                return float4(color, 1.0);
+            }
+
+            ENDHLSL
         }
     }
-    FallBack "Diffuse"
+    FallBack "Universal Render Pipeline/Simple Lit"
 }
