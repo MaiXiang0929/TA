@@ -102,6 +102,8 @@ Shader "Cel-Shading/ToonBody"
             Name "UniversalForward"
             Tags { "LightMode" = "UniversalForward" }
 
+            Cull Off  // 不裁剪
+
             HLSLPROGRAM // 着色器程序
                 
                 #pragma vertex MainVertexShader // 顶点着色器入口
@@ -213,13 +215,13 @@ Shader "Cel-Shading/ToonBody"
             Name "ShadowCaster"
             Tags
             {
-                "LightMode" = "ShadowCaster"
+                "LightMode" = "ShadowCaster" // 光照模式：阴影投射
             }
 
-            Zwrite  On 
-            ZTest LEqual 
-            ColorMask 0
-            Cull Off 
+            ZWrite  On // 写入深度缓冲区
+            ZTest LEqual  // 深度测试：小于等于
+            ColorMask 0 // 不写入颜色缓冲区
+            Cull Off  // 不裁剪
 
             HLSLPROGRAM
 

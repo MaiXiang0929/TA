@@ -15,6 +15,10 @@ Shader "Cel-Shading/ToonFace"
         [HideInInspector] _HeadForward ("Head Forward", Vector) = (0, 0, 1, 0) // 面部前方
         [HideInInspector] _HeadRight ("Head Right", Vector) = (1, 0, 0, 0) // 面部右侧
         [HideInInspector] _HeadUp ("Head Up", Vector) = (0, 1, 0, 0) // 面部上方
+
+        [Header(Face Blush)]
+        _FaceBlushColor ("Face Blush Color", Color) = (1, 0, 0, 1) // 腮红颜色
+        _FaceBlushStrength ("Face Blush Strength", Range(0, 1)) = 0 // 腮红强度
     }
     SubShader
     {
@@ -57,6 +61,10 @@ Shader "Cel-Shading/ToonFace"
                 float3 _HeadForward;
                 float3 _HeadRight;
                 float3 _HeadUp;
+
+                // Face Blush
+                float4 _FaceBlushColor;
+                float _FaceBlushStrength;
 
             CBUFFER_END
         
@@ -145,6 +153,9 @@ Shader "Cel-Shading/ToonFace"
                     sdf *= shadowMask.g; // 使用G通道控制阴影强度
                     sdf = lerp(sdf, 1, shadowMask.a); // 使用A通道作为阴影遮罩
 
+                    // Face Blush
+                    half blushStrength = lerp(0, baseMap.a, _FaceBlushStrength); //  根据BaseMap的Alpha通道计算腮红强度
+
                     // Merge Color
                     #if _USE_SDF_SHADOW
                         half3 finalColor = lerp(_ShadowColor.rgb * baseMap.rgb, baseMap.rgb, sdf);
@@ -152,7 +163,89 @@ Shader "Cel-Shading/ToonFace"
                         half3 finalColor = baseMap.rgb * halflambert;
                     #endif
 
+                    finalColor = lerp(finalColor, finalColor * _FaceBlushColor.rgb, blushStrength);
+
                     return float4(finalColor, 1);
+                }
+
+            ENDHLSL
+        }
+
+        Pass // 渲染通道 阴影渲染
+        {
+            Name "ShadowCaster"
+            Tags
+            {
+                "LightMode" = "ShadowCaster" // 光照模式：阴影投射
+            }
+
+            ZWrite  On // 写入深度缓冲区
+            ZTest LEqual  // 深度测试：小于等于
+            ColorMask 0 // 不写入颜色缓冲区
+            Cull Off  // 不裁剪
+
+            HLSLPROGRAM
+
+                #pragma multi_compile_instancing // 启用GPU实例化编译
+                #pragma multi_compile _ DOTS_INSTANCING_ON // 启用DOTS实例化编译
+                #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW // 启用点光源阴影
+
+                #pragma vertex ShadowVertexShader // 顶点着色器入口
+                #pragma fragment ShadowFragmentShader // 片元着色器入口
+
+                float3 _LightDirection;
+                float3 _LightPosition;
+
+                // 顶点着色器输入参数
+                struct Attributes 
+                {
+                    float4 positionOS : POSITION;
+                    float3 normalOS : NORMAL;
+                };
+
+                // 片元着色器输入参数
+                struct Varyings
+                {
+                    float4 positionCS : SV_POSITION;
+                };
+
+
+                // 将阴影的世界空间顶点位置转换为适合阴影投射的裁剪空间位置
+                half4 GetShadowPositionHClip(Attributes input)
+                {
+                    float3 positionWS = TransformObjectToWorld(input.positionOS.xyz); // 将本地空间顶点坐标转换为世界空间顶点坐标
+                    float3 normalWS = TransformObjectToWorldNormal(input.normalOS); // 将本地空间法线转换为世界空间法线
+
+                    #if _CASTING_PUNCTUAL_LIGHT_SHADOW // 点光源
+                        float3 lightDirectionWS = normalize(_LightPosition - positionWS); // 计算光源方向
+                    #else // 平行光
+                        float3 lightDirectionWS = _LightDirection; // 使用预定义的光源方向
+                    #endif
+
+                    float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS)); // 应用阴影偏移
+
+                    // 根据平台的Z缓冲区方向调整Z值
+                    #if UNITY_REVERSED_Z // 反转Z缓冲区
+                        positionCS.z = min(positionCS.z, UNITY_NEAR_CLIP_VALUE); // 限制Z值在近裁剪平面以下
+                    #else // 正向Z缓冲区
+                        positionCS.z = max(positionCS.z, UNITY_NEAR_CLIP_VALUE); // 限制Z值在远裁剪平面以上
+                    #endif
+
+                    return positionCS; // 返回裁剪空间顶点坐标
+                }
+
+                // 顶点着色器
+                Varyings ShadowVertexShader(Attributes input)
+                {
+                    Varyings output;
+                    output.positionCS = GetShadowPositionHClip(input);
+                    return output;
+                }
+
+                // 片元着色器
+                half4 ShadowFragmentShader(Varyings input) : SV_TARGET
+                {
+                    return 0;
                 }
 
             ENDHLSL
