@@ -2,57 +2,79 @@ Shader "Custom/ShaderBase/Chapter6/HalfLambert"
 {
     Properties
     {
-        _Diffuse ("Diffuse", color) = (1, 1, 1, 1)
+        _Diffuse ("Diffuse", Color) = (1, 1, 1, 1)
     }
     SubShader
     {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+        }
+
+        HLSLINCLUDE
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            CBUFFER_START(UnityPerMaterial)
+
+                float4 _Diffuse;
+
+            CBUFFER_END
+
+        ENDHLSL
+
         Pass 
         {
-            Tags { "LightMode"="ForwardBase" }
+            Tags { "LightMode" = "UniversalForward" }
 
-            CGPROGRAM
+            HLSLPROGRAM
         
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "Lighting.cginc"
+            struct Attributes 
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+            };
 
-            fixed4 _Diffuse;
+            struct Varyings 
+            {
+                float4 positionCS : SV_POSITION;
+                float3 normalWS : TEXCOORD0;
+            };
 
-            struct a2v {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                };
+            Varyings vert(Attributes input) {
+                Varyings output;
 
-            struct v2f {
-                float4 pos : POSITION;
-                float3 worldNormal : TEXCOORD0;
-                };
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                output.normalWS = TransformObjectToWorldNormal(input.normalOS);
 
-            v2f vert(a2v v) {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.worldNormal = mul(v.normal, (float3x3)unity_WorldToObject);
+                return output;
+            }
 
-                return o;
-                }
+            half4 frag(Varyings input) : SV_Target 
+            {
+                half3 ambient = SampleSH(input.normalWS);
+                half3 normalWS = normalize(input.normalWS);
 
-            fixed4 frag(v2f i) : SV_Target {
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
-                fixed3 worldNormal = normalize(i.worldNormal);
-                fixed3 worldLightDir = normalize(_WorldSpaceLightPos0.xyz);
+                Light mainLight = GetMainLight();
+                half3 lightColor = mainLight.color;
+                half3 lightDirWS = normalize(mainLight.direction);
 
                 
-                fixed halfLambert = dot(worldNormal, worldLightDir) * 0.5 + 0.5;
-                fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * halfLambert;
+                half halfLambert = dot(normalWS, lightDirWS) * 0.5 + 0.5;
+                half3 diffuse = lightColor * _Diffuse.rgb * halfLambert;
 
-                fixed3 color = ambient + diffuse;
+                half3 finalColor = ambient + diffuse;
 
-                return fixed4(color, 1.0);
-                }
+                return float4(finalColor, 1.0);
+            }
 
-            ENDCG
+            ENDHLSL
         }
     }
-    FallBack "Diffuse"
+    FallBack "Universal Render Pipeline/Simple Lit"
 }

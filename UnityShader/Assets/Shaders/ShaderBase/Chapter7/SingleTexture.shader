@@ -11,65 +11,95 @@ Shader "Custom/ShaderBase/Chapter7/SingleTexture"
     }
     SubShader
     {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+        }
+
+        HLSLINCLUDE
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _Color;
+                sampler2D _MainTex;
+                float4 _MainTex_ST;
+                float4 _Specular;
+                float _Gloss;
+            CBUFFER_END
+
+        ENDHLSL
+
         Pass
         {
-            Tags {"LightMode" = "ForwardBase"}
-            CGPROGRAM
+            Tags {"LightMode" = "UniversalForward"}
+
+            HLSLPROGRAM
 
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "Lighting.cginc"
-
-            fixed4 _Color;
-            sampler2D _MainTex;
-            float4 _MainTex_ST;
-            fixed4 _Specular;
-            float _Gloss;
-
-            struct a2v{
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                float4 texcoord : TEXCOORD0;
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+                float2 uv : TEXCOORD0;
             };
 
-            struct v2f{
-                float4 pos : SV_POSITION;
-                float3 worldNormal : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 normalWS : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
                 float2 uv : TEXCOORD2;
             };
 
-            v2f vert(a2v v){
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
+            Varyings vert(Attributes input){
+                Varyings output;
 
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.uv = TRANSFORM_TEX(v.texcoord, _MainTex);
+                VertexPositionInputs posInputs = GetVertexPositionInputs(input.positionOS.xyz);
+                output.positionCS = posInputs.positionCS;
+                output.positionWS = posInputs.positionWS;
+                
+                // 法线变换到世界空间
+                VertexNormalInputs normalInputs = GetVertexNormalInputs(input.normalOS);
+                output.normalWS = normalInputs.normalWS;
+                
+                // UV 变换
+                output.uv = input.uv;
 
-                return o;
+                return output;
             }
 
-            fixed4 frag(v2f i) : SV_Target{
-                fixed3 worldNormal = normalize(i.worldNormal);
-                fixed3 worldLightDir = normalize(UnityWorldSpaceLightDir(i.worldPos));
+            half4 frag(Varyings input) : SV_Target
+            {
+                Light mainLight = GetMainLight();
+                half3 lightColor = mainLight.color;
 
-                fixed3 albedo = tex2D(_MainTex, i.uv).rgb * _Color.rgb;
+                half3 normalWS = normalize(input.normalWS);
+                half3 lightDirWS = normalize(mainLight.direction);
 
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz * albedo;
+                half4 mainTex = tex2D(_MainTex, input.uv);
 
-                fixed3 diffuse = _LightColor0.rgb * albedo * max(0, dot(worldNormal,worldLightDir));
+                half3 albedo = mainTex.rgb * _Color.rgb;
 
-                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(i.worldPos));
-                fixed3 halfDir = normalize(worldLightDir + viewDir);
-                fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(max(0, dot(worldNormal, halfDir)), _Gloss);
+                half3 ambient = unity_AmbientSky.rgb * albedo;
 
-                return fixed4(ambient + diffuse + specular, 1.0);
+                half3 diffuse = lightColor * albedo * max(0, dot(normalWS,lightDirWS));
+
+                half3 viewDirWS = normalize(GetWorldSpaceNormalizeViewDir(input.positionWS));
+                half3 halfDir = normalize(lightDirWS + viewDirWS);
+                half3 specular = lightColor * _Specular.rgb * pow(max(0, dot(normalWS, halfDir)), _Gloss);
+
+                half3 finalColor = ambient + diffuse + specular;
+
+                return half4(finalColor, 1.0);
             }
 
-            ENDCG
+            ENDHLSL
         }
     }
-    Fallback "Specular"
+    FallBack "Universal Render Pipeline/Lit"
 }

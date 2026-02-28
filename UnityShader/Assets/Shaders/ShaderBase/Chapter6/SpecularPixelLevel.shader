@@ -11,58 +11,87 @@ Shader "Custom/ShaderBase/Chapter6/SpecularPixelLevel"
     }
     SubShader
     {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+        }
+
+        HLSLINCLUDE
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+
+            CBUFFER_START(UnityPerMaterial)
+
+                float4 _Diffuse;
+                float4 _Specular;
+                float _Gloss;
+
+            CBUFFER_END
+
+        ENDHLSL
+
         Pass
         {
-            Tags {"LightMode" = "ForwardBase"}
-            CGPROGRAM
+            Tags {"LightMode" = "UniversalForward"}
+
+            HLSLPROGRAM
 
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "Lighting.cginc"
-
-            fixed4 _Diffuse;
-            fixed4 _Specular;
-            float _Gloss;
-
-            struct a2v{
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
             };
 
-            struct v2f{
-                float4 pos : SV_POSITION;
-                float3 worldNormal : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
-                };
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 normalWS : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
+            };
 
-            v2f vert(a2v v){
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
+            Varyings vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
 
-                o.worldNormal = mul(v.normal, (float3x3)unity_WorldToObject);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                output.normalWS = TransformObjectToWorldNormal(input.normalOS);
+                output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                return output;
+            }
 
-                return o;
-                }
+            half4 frag(Varyings input) : SV_Target
+            {
+                // 环境光
+                half3 ambient = unity_AmbientSky.rgb;
+                
+                // 归一化法线
+                half3 normalWS = normalize(input.normalWS);
+                
+                // 获取主光源信息
+                Light mainLight = GetMainLight();
+                half3 lightColor = mainLight.color;
+                half3 lightDirWS = normalize(mainLight.direction);
 
-            fixed4 frag(v2f i) : SV_Target{
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
+                half3 diffuse = lightColor * _Diffuse.rgb * saturate(dot(normalWS, lightDirWS));
 
-                fixed3 worldNormal = normalize(i.worldNormal);
-                fixed3 worldLightDir = normalize(_WorldSpaceLightPos0.xyz);
+                half3 reflectDir = normalize(reflect(-lightDirWS, normalWS));
+                half3 viewDir = normalize(_WorldSpaceCameraPos.xyz - input.positionWS);
+                half3 specular = lightColor * _Specular.rgb * pow(saturate(dot(reflectDir, viewDir)), _Gloss);
 
-                fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * saturate(dot(worldNormal, worldLightDir));
+                // 合并光照
+                half3 finalColor = ambient + diffuse + specular;
 
-                fixed3 reflectDir = normalize(reflect(-worldLightDir, worldNormal));
-                fixed3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.worldPos.xyz);
-                fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(saturate(dot(reflectDir, viewDir)), _Gloss);
+                return float4(finalColor, 1.0);
+            }
 
-                return fixed4(ambient + diffuse + specular, 1.0);
-                }
-
-            ENDCG
+            ENDHLSL
         }
     }
-    FallBack "Specular"
+    FallBack "Universal Render Pipeline/Simple Lit"
 }
