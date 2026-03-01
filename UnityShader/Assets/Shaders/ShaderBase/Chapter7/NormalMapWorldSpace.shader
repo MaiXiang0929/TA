@@ -34,8 +34,10 @@ Shader "Custom/ShaderBase/Chapter7/NormalMapWorldSpace"
 
             CBUFFER_END
 
-            TEXTURE2D(_BaseMap);    SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_BumpMap);    SAMPLER(sampler_BumpMap);
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_BumpMap);
+            SAMPLER(sampler_BumpMap);
 
         ENDHLSL
 
