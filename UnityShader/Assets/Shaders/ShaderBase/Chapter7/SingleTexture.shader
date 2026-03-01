@@ -89,7 +89,7 @@ Shader "Custom/ShaderBase/Chapter7/SingleTexture"
 
                 half3 diffuse = lightColor * albedo * max(0, dot(normalWS,lightDirWS));
 
-                half3 viewDirWS = normalize(GetWorldSpaceNormalizeViewDir(input.positionWS));
+                half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 half3 halfDir = normalize(lightDirWS + viewDirWS);
                 half3 specular = lightColor * _Specular.rgb * pow(max(0, dot(normalWS, halfDir)), _Gloss);
 
