@@ -130,7 +130,7 @@ Shader "Custom/ShaderBase/Chapter7/MaskTexture"
                 float spec = pow(max(0, dot(normalWS, halfDirWS)), _Gloss);
                 half3 specular = lightColor * _SpecularColor.rgb * spec * specularMask;
 
-                // finalColor
+                // Merge Color
                 half3 finalColor = ambient + diffuse + specular;
 
                 return half4(finalColor, 1.0);
