@@ -35,6 +35,7 @@ Shader "Custom/ShaderBase/Chapter8/AlphaTestBothSided"
 
         Pass
         {
+            Name "ForwardLit"
             Tags{"LightMode" = "UniversalForward"}
             Cull Off
 
@@ -114,5 +115,5 @@ Shader "Custom/ShaderBase/Chapter8/AlphaTestBothSided"
     }
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
     //项目中用
-    //FallBack "Universal Render Pipeline/Unlit"
+    //FallBack "Universal Render Pipeline/Lit"
 }

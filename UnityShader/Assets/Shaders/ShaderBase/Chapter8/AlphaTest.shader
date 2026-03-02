@@ -113,5 +113,5 @@ Shader "Custom/ShaderBase/Chapter8/AlphaTest"
     }
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
     //项目中用
-    //FallBack "Universal Render Pipeline/Unlit"
+    //FallBack "Universal Render Pipeline/Lit"
 }
