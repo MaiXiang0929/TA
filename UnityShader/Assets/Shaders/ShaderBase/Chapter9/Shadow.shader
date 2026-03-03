@@ -2,144 +2,174 @@ Shader "Custom/ShaderBase/Chapter9/Shadow"
 {
     Properties
     {
-        _Diffuse ("Diffuse", Color) = (1, 1, 1, 1)
-        _Specular ("Specular", Color) = (1, 1, 1, 1)
+        _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
+        _SpecularColor ("Specular Color", Color) = (1, 1, 1, 1)
         _Gloss ("Gloss", Range(8.0, 256)) = 20
     }
     SubShader
     {
-        Pass
-        {
-            // pass for ambient light & first light (directional light)
-            Tags {"LightMode" = "ForwardBase"}
-
-            CGPROGRAM
-            #pragma multi_compile_fwdbase
-            #pragma vertex vert
-            #pragma fragment frag
-
-            #include "Lighting.cginc"
-            #include "AutoLight.cginc"
-
-            fixed4 _Diffuse;
-            fixed4 _Specular;
-            float _Gloss;
-
-            struct a2v{
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-            };
-
-            struct v2f{
-                float4 pos : SV_POSITION;
-                float3 worldNormal : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
-                SHADOW_COORDS(2)
-                };
-
-            v2f vert(a2v v){
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-
-                // pass shadow coordinates to pixel shader
-                TRANSFER_SHADOW(o);
-
-                return o;
-                }
-
-            fixed4 frag(v2f i) : SV_Target{
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
-
-                fixed3 worldNormal = normalize(i.worldNormal);
-                fixed3 worldLightDir = normalize(UnityWorldSpaceLightDir(i.worldPos));
-
-                // use shadow coordinates to sample shadow map
-                fixed shadow = SHADOW_ATTENUATION(i);
-
-                fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * saturate(dot(worldNormal, worldLightDir));
-
-                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(i.worldPos));
-                fixed3 halfDir = normalize(viewDir + worldLightDir);
-                fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(max(0,dot(worldNormal,halfDir)), _Gloss);
-
-                fixed atten = 1.0;
-
-                return fixed4(ambient + (diffuse + specular) * shadow * atten, 1.0);
-                }
-
-            ENDCG
+        Tags 
+        { 
+            "RenderType" = "Opaque" 
+            "RenderPipeline" = "UniversalPipeline"
+            "Queue" = "Geometry"
         }
 
-        Pass
-        {
-            // pass for other pixel lights
-            Tags { "LightMode"="ForwardAdd" }
+        HLSLINCLUDE
 
-            Blend One One
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            CGPROGRAM
-            #pragma multi_compile_fwdadd
-            #pragma vertex vert
-            #pragma fragment frag
+            CBUFFER_START(UnityPerMaterial)
 
-            #include "Lighting.cginc"
-            #include "UnityCG.cginc"
-            #include "AutoLight.cginc"
+                float4 _BaseColor;
+                float4 _SpecularColor;
+                float _Gloss;
 
-            fixed4 _Diffuse;
-            fixed4 _Specular;
-            float _Gloss;
+            CBUFFER_END
 
-            struct a2v{
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
             };
 
-            struct v2f{
-                float4 pos : SV_POSITION;
-                float3 worldNormal : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
-                LIGHTING_COORDS(2, 3)
-                };
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 normalWS : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
+            };
 
-            v2f vert(a2v v){
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
+            Varyings vert(Attributes input)
+            {
+                Varyings output = (Varyings)0;
 
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                // position
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+                output.positionCS = vertexInput.positionCS;
+                output.positionWS = vertexInput.positionWS;
 
-                TRANSFER_VERTEX_TO_FRAGMENT(o);
+                // normal
+                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS);
+                output.normalWS = normalInput.normalWS;
 
-                return o;
+                return output;
+            }
+
+            half3 DirectLightBP(Light light, half3 normalWS, half3 viewDirWS)
+            {
+                half3 lightDirWS = normalize(light.direction);
+                half3 halfDirWS = normalize(viewDirWS + lightDirWS);
+
+                // Diffuse
+                float diff = saturate(dot(normalWS, lightDirWS));
+                half3 diffuse = light.color * _BaseColor.rgb * diff;
+
+                // Specular
+                float spec = pow(saturate(dot(normalWS, halfDirWS)), _Gloss);
+                half3 specular = light.color * _SpecularColor.rgb * spec;
+
+                half3 blinnPhong = (diffuse + specular) * light.distanceAttenuation * light.shadowAttenuation;
+
+                return blinnPhong;
+            }
+
+        ENDHLSL
+
+        Pass // Main Lighting
+        {
+            Name "ForwardLit"
+            Tags { "LightMode" = "UniversalForward" }
+
+            HLSLPROGRAM
+
+                #pragma vertex vert
+                #pragma fragment frag
+
+                // URP 的附加光源多编译宏
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS // 主光源阴影开关
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE // 主光源级联阴影开关
+                #pragma multi_compile _ _ADDITIONAL_LIGHTS // 像素级附加光照计算开关
+                #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS // 附加光源阴影开关
+                #pragma multi_compile _ _SHADOWS_SOFT // 阴影平滑开关
+
+                half4 frag(Varyings input) : SV_Target
+                {
+                    half3 normalWS = normalize(input.normalWS);
+                    half3 viewDirWS = normalize(GetWorldSpaceViewDir(input.positionWS));
+
+                    // Light Info
+                    float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                    Light mainLight = GetMainLight(shadowCoord);
+
+                    // Ambient
+                    half3 ambient = SampleSH(normalWS) * _BaseColor.rgb;
+
+                    // Main Light
+                    half3 finalColor = ambient + DirectLightBP(mainLight, normalWS, viewDirWS);
+
+                    // Additional Light
+                    int pixelLightCount = GetAdditionalLightsCount();
+                    for (int i = 0; i < pixelLightCount; ++i)
+                    {
+                        Light addLight = GetAdditionalLight(i, input.positionWS);
+                        finalColor += DirectLightBP(addLight, normalWS, viewDirWS);
+                    }
+                    
+                    return half4(finalColor, 1.0);
                 }
 
-            fixed4 frag(v2f i) : SV_Target{
+            ENDHLSL
+        }
+        
+        Pass // Shadow Caster
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
 
-                fixed3 worldNormal = normalize(i.worldNormal);
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
 
-                #ifdef USING_DIRECTIONAL_LIGHT
-                    fixed3 worldLightDir = normalize(_WorldSpaceLightPos0.xyz);
-                #else
-                    fixed3 worldLightDir = normalize(_WorldSpaceLightPos0.xyz - i.worldPos.xyz);
-                #endif
+            HLSLPROGRAM
+            #pragma vertex ShadowPassVertex
+            #pragma fragment ShadowPassFragment
 
-                fixed3 diffuse = _LightColor0.rgb * _Diffuse.rgb * saturate(dot(worldNormal, worldLightDir));
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
-                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(i.worldPos));
-                fixed3 halfDir = normalize(viewDir + worldLightDir);
-                fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(max(0,dot(worldNormal,halfDir)), _Gloss);
+            struct ShadowAttributes
+            {
+                float4 positionOS   : POSITION;
+                float3 normalOS     : NORMAL;
+            };
 
-                UNITY_LIGHT_ATTENUATION(atten, i, i.worldPos);
+            struct ShadowVaryings
+            {
+                float4 positionCS   : SV_POSITION;
+            };
 
-                return fixed4( (diffuse + specular) * atten, 1.0);
-                }
+            float3 _LightDirection;
 
-            ENDCG
+            ShadowVaryings ShadowPassVertex(ShadowAttributes input)
+            {
+                ShadowVaryings output = (ShadowVaryings)0;
+
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
+                
+                // 使用 URP 专用的阴影偏移裁剪坐标计算
+                output.positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, _LightDirection));
+                return output;
+            }
+
+            half4 ShadowPassFragment() : SV_Target { return 0; }
+
+            ENDHLSL
         }
     }
-    FallBack "Specular"
+    FallBack "Hidden/Universal Render Pipeline/FallbackError"
+    //项目中用
+    //FallBack "Universal Render Pipeline/Lit"
 }
+ 
