@@ -99,6 +99,13 @@ Shader "Custom/ShaderBase/Chapter9/AlphaTestWithShadow"
                 #pragma vertex vert
                 #pragma fragment frag
 
+                // URP 的附加光源多编译宏
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS // 主光源阴影开关
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE // 主光源级联阴影开关
+                #pragma multi_compile _ _ADDITIONAL_LIGHTS // 像素级附加光照计算开关
+                #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS // 附加光源阴影开关
+                #pragma multi_compile _ _SHADOWS_SOFT // 阴影平滑开关
+
                 half4 frag(Varyings input) : SV_Target
                 {
                     // Light Info
