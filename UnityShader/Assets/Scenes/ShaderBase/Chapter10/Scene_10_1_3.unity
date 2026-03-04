@@ -397,7 +397,7 @@ GameObject:
   - component: {fileID: 6453931567089469775}
   - component: {fileID: 9111925371684306309}
   m_Layer: 0
-  m_Name: Teapot
+  m_Name: ReflectionTeapot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

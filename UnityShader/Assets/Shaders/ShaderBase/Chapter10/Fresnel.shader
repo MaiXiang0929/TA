@@ -2,85 +2,137 @@ Shader "Custom/ShaderBase/Chapter10/Fresnel"
 {
     Properties
     {
-        _Color ("Color Tint", Color) = (1,1,1,1)
+        [Header(Base Settings)]
+        _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
         _FresnelScale ("Fresnel Scale", Range(0, 1)) = 0.5
-        _Cubemap ("Refraction Cubemap", Cube) = "_Skybox" {}
+
+        [Header(Skybox Settings)]
+        [NoScaleOffset] _Cubemap ("Refraction Cubemap", Cube) = "_Skybox" {}
+
+        [Header(Box Projection Settings)]
+        [Vector3] _BoxCenter ("Room Center (World)", Vector) = (0, 0, 0, 0)
+        [Vector3] _BoxMin ("Room Min (World)", Vector) = (-5, -5, -5, 0)
+        [Vector3] _BoxMax ("Room Max (World)", Vector) = (5, 5, 5, 0)
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry"}
+        Tags
+        {
+            "RenderType"="Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+            "Queue"="Geometry"
+        }
 
-        Pass {
-            Tags {"LightMode"="ForwardBase"}
+        HLSLINCLUDE
 
-            CGPROGRAM
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            #pragma multi_compile_fwdbase
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseColor;
+                float4 _FresnelScale;
+                float3 _BoxCenter;
+                float3 _BoxMin;
+                float3 _BoxMax;
+            CBUFFER_END
 
-            #pragma vertex vert
-            #pragma fragment frag
+            TEXTURECUBE(_Cubemap);
+            SAMPLER(sampler_Cubemap);
 
-            #include "Lighting.cginc"
-            #include "AutoLight.cginc"
+        ENDHLSL
 
-            fixed4 _Color;
-            float _FresnelScale;
-            samplerCUBE _Cubemap;
+        Pass
+        {
+            Name "ForwardLit"
+            Tags {"LightMode" = "UniversalForward"}
 
-            struct a2v {
-                float4 vertex : POSITION;
-				float3 normal : NORMAL;
-            };
+            HLSLPROGRAM
 
-            struct v2f {
-                float4 pos : SV_POSITION;
-                float3 worldPos : TEXCOORD0;
-                float3 worldNormal : TEXCOORD1;
-                float3 worldViewDir : TEXCOORD2;
-                float3 worldRefl : TEXCOORD3;
-                SHADOW_COORDS(4)
-            };
+                // #pragma multi_compile_forwardplus // 启用 Forward+ 渲染路径，支持多光源优化及多反射探针混合
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS // 主光源阴影开关
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE // 主光源级联阴影开关
+                #pragma multi_compile _ _SHADOWS_SOFT // 阴影平滑开关
 
-            v2f vert(a2v v) {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
+                #pragma vertex vert
+                #pragma fragment frag
 
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
+                struct Attributes
+                {
+                    float4 positionOS : POSITION;
+                    float3 normalOS : NORMAL;
+                };
 
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                struct Varyings
+                {
+                    float4 positionCS : SV_POSITION;
+                    float3 positionWS : TEXCOORD0;
+                    float3 normalWS : TEXCOORD1;
+                };
 
-                o.worldViewDir = UnityWorldSpaceViewDir(o.worldPos);
+                Varyings vert(Attributes input)
+                {
+                    Varyings output = (Varyings)0;
+                    
+                    // position
+                    VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+                    output.positionCS = vertexInput.positionCS;
+                    output.positionWS = vertexInput.positionWS;
+                    
+                    // normal
+                    VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS);
+                    output.normalWS = normalInput.normalWS;
+                    
+                    return output;
+                }
 
-                o.worldRefl = reflect(-o.worldViewDir, o.worldNormal);
+                half4 frag(Varyings input) : SV_Target
+                {
+                    // Light Info
+                    float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                    Light mainLight = GetMainLight(shadowCoord);
+                    half3 lightColor = mainLight.color;
+                    half3 lightDirWS = mainLight.direction;
+                    half shadowAttenuation = mainLight.shadowAttenuation;
 
-                TRANSFER_SHADOW(o);
+                    // Normalize Vector
+                    half3 normalWS = normalize(input.normalWS);
+                    half3 viewDirWS = normalize(GetWorldSpaceViewDir(input.positionWS));
+                    half3 reflectDirWS = reflect(-viewDirWS, normalWS);
 
-                return o;
-            }
+                    // Ambient
+                    half3 ambient = SampleSH(normalWS);
 
-            fixed4 frag(v2f i) : SV_Target {
-                fixed3 worldNormal = normalize(i.worldNormal);
-                fixed3 worldLightDir = normalize(UnityWorldSpaceLightDir(i.worldPos));
-                fixed3 worldViewDir = normalize(i.worldViewDir);
+                    // Reflection
+                    // Box Projection
+                    float3 factorsMax = (_BoxMax - input.positionWS) / reflectDirWS;
+                    float3 factorsMin = (_BoxMin - input.positionWS) / reflectDirWS;
+                    float3 selection = (reflectDirWS > 0) ? factorsMax : factorsMin; // 选取射线朝向方向的那个交点
 
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
+                    float distance = min(min(selection.x, selection.y), selection.z); // 找到最近的交点距离
+                   
+                    float3 intersectPositionWS = input.positionWS + reflectDirWS * distance; // 计算交点在世界空间的位置
+                    
+                    half3 correctedDir = intersectPositionWS - _BoxCenter; // 计算从盒子中心到交点的方向，这是修正后的采样方向
 
-                UNITY_LIGHT_ATTENUATION(atten, i, i.worldPos);
+                    half3 reflection = SAMPLE_TEXTURECUBE(_Cubemap, sampler_Cubemap, correctedDir).rgb;
 
-                fixed3 reflection = texCUBE(_Cubemap, i.worldRefl).rgb;
+                    // Fresnel
+                    half fresnel = _FresnelScale + (1 - _FresnelScale) * pow(1 - dot(viewDirWS, normalWS), 5);
 
-                fixed fresnel = _FresnelScale + (1 - _FresnelScale) * pow(1 - dot(worldViewDir, worldNormal), 5);
+                    // Diffuse
+                    half diff = saturate(dot(normalWS, lightDirWS));
+                    half3 diffuse = lightColor * _BaseColor.rgb * diff;
 
-                fixed3 diffuse = _LightColor0.rgb * _Color.rgb * max(0, dot(worldNormal, worldLightDir));
+                    // Merge Colr
+                    half3 finalColor = ambient + lerp(diffuse, reflection, saturate(fresnel)) * shadowAttenuation;
 
-                fixed3 color = ambient + lerp(diffuse, reflection, saturate(fresnel)) * atten;
-                
-                return fixed4(color, 1.0);
-            }
+                    return half4(finalColor, 1.0);
+                }
 
-            ENDCG
-            
+            ENDHLSL
         }
     }
-    FallBack "Reflective/VertexLit"
+    FallBack "Hidden/Universal Render Pipeline/FallbackError"
+    //项目中用
+    //FallBack "Universal Render Pipeline/Lit"
 }

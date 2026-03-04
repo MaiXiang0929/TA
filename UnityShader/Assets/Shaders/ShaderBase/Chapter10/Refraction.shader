@@ -3,7 +3,7 @@ Shader "Custom/ShaderBase/Chapter10/Refraction"
     Properties
     {
         [Header(Base Settings)]
-        _BaseColor ("Color Tint", Color) = (1, 1, 1, 1)
+        _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
         _RefractionColor ("Refraction Color", Color) = (1, 1, 1, 1)
         _RefractionAmount ("Refraction Amount", Range(0, 1)) = 1
         _RefractionRatio ("Refraction Ratio (IOR)", Range(0.1, 1)) = 0.5
@@ -92,85 +92,48 @@ Shader "Custom/ShaderBase/Chapter10/Refraction"
 
                 half4 frag(Varyings input) : SV_Target
                 {
-                    // 1. 获取光照信息
+                    // Light Info
                     float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
                     Light mainLight = GetMainLight(shadowCoord);
+                    half3 lightColor = mainLight.color;
+                    half3 lightDirWS = mainLight.direction;
+                    half shadowAttenuation = mainLight.shadowAttenuation;
                     
+                    // Normalize Vector
                     half3 normalWS = normalize(input.normalWS);
                     half3 viewDirWS = normalize(GetWorldSpaceViewDir(input.positionWS));
-                    half3 lightDirWS = normalize(mainLight.direction);
 
-                    // 2. 环境光 (SH)
+                    // Ambient
                     half3 ambient = SampleSH(normalWS);
 
-                    // 3. 漫反射 (Diffuse)
+                    // Diffuse
                     half diff = saturate(dot(normalWS, lightDirWS));
-                    half3 diffuse = mainLight.color * _BaseColor.rgb * diff;
+                    half3 diffuse = lightColor * _BaseColor.rgb * diff;
 
-                    // 4. 折射 (Refraction)
-                    // 在像素着色器重新计算折射方向，效果更细腻
+                    // Refraction
                     float3 refractDirWS = refract(-viewDirWS, normalWS, _RefractionRatio);
-                    half3 refraction = SAMPLE_TEXTURECUBE(_Cubemap, sampler_Cubemap, refractDirWS).rgb * _RefractionColor.rgb;
+                    // Reflection
+                    // Box Projection
+                    float3 factorsMax = (_BoxMax - input.positionWS) / refractDirWS;
+                    float3 factorsMin = (_BoxMin - input.positionWS) / refractDirWS;
+                    float3 selection = (refractDirWS > 0) ? factorsMax : factorsMin; // 选取射线朝向方向的那个交点
 
-                    // 5. 颜色混合
-                    // 结合主光源阴影、漫反射和折射
-                    half3 finalColor = ambient + lerp(diffuse, refraction, _RefractionAmount) * mainLight.shadowAttenuation;
+                    float distance = min(min(selection.x, selection.y), selection.z); // 找到最近的交点距离
+                    
+                    float3 intersectPositionWS = input.positionWS + refractDirWS * distance; // 计算交点在世界空间的位置
+                    
+                    half3 correctedDir = intersectPositionWS - _BoxCenter; // 计算从盒子中心到交点的方向，这是修正后的采样方向
+
+                    half3 refraction = SAMPLE_TEXTURECUBE(_Cubemap, sampler_Cubemap, correctedDir).rgb * _RefractionColor.rgb;
+
+                    // Merge Color
+                    half3 finalColor = ambient + lerp(diffuse, refraction, _RefractionAmount) * shadowAttenuation;
 
                     return half4(finalColor, 1.0);
                 }
 
             ENDHLSL
         }
-        //     struct v2f {
-        //         float4 pos : SV_POSITION;
-        //         float3 worldPos : TEXCOORD0;
-        //         float3 worldNormal : TEXCOORD1;
-        //         float3 worldViewDir : TEXCOORD2;
-        //         float3 worldRefr : TEXCOORD3;
-        //         SHADOW_COORDS(4)
-        //     };
-
-        //     v2f vert(a2v v) {
-        //         v2f o;
-        //         o.pos = UnityObjectToClipPos(v.vertex);
-
-        //         o.worldNormal = UnityObjectToWorldNormal(v.normal);
-
-        //         o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-
-        //         o.worldViewDir = UnityWorldSpaceViewDir(o.worldPos);
-
-        //         // compute the refract dir in world space
-        //         o.worldRefr = refract(-normalize(o.worldViewDir), normalize(o.worldNormal), _RefractionRatio);
-
-        //         TRANSFER_SHADOW(o);
-
-        //         return o;
-        //     }
-
-        //     fixed4 frag(v2f i) : SV_Target {
-        //         fixed3 worldNormal = normalize(i.worldNormal);
-        //         fixed3 worldLightDir = normalize(UnityWorldSpaceLightDir(i.worldPos));
-        //         fixed3 worldViewDir = normalize(i.worldViewDir);
-
-        //         fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
-
-        //         fixed3 diffuse = _LightColor0.rgb * _Color.rgb * max(0, dot(worldNormal, worldLightDir));
-
-        //         // use the refract dir in world space to access the cubemap
-        //         fixed3 refraction = texCUBE(_Cubemap, i.worldRefr).rgb * _RefractionColor.rgb;
-
-        //         UNITY_LIGHT_ATTENUATION(atten, i, i.worldPos);
-
-        //         // mix the diffuse color with the refract color
-        //         fixed3 color = ambient + lerp(diffuse, refraction, _RefractionAmount) * atten;
-                
-        //         return fixed4(color, 1.0);
-        //     }
-
-        //     ENDCG
-            
-        // }
     }
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
     //项目中用
