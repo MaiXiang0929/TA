@@ -64,14 +64,14 @@ Shader "Custom/ShaderBase/Chapter9/AlphaBlendWithShadow"
                 return output;
             }
 
-            half3 DirectLightBP(Light light, half3 normalWS, half3 viewDirWS)
+            half3 DirectLightBP(Light light, half3 normalWS, half3 viewDirWS, half3 albedo)
             {
                 half3 lightDirWS = normalize(light.direction);
                 half3 halfDirWS = normalize(viewDirWS + lightDirWS);
 
                 // Diffuse
                 float diff = saturate(dot(normalWS, lightDirWS));
-                half3 diffuse = light.color * _BaseColor.rgb * diff;
+                half3 diffuse = light.color * albedo * diff;
 
                 // Specular
                 float spec = pow(saturate(dot(normalWS, halfDirWS)), _Gloss);
@@ -123,14 +123,14 @@ Shader "Custom/ShaderBase/Chapter9/AlphaBlendWithShadow"
                     half3 ambient = SampleSH(normalWS) * albedo.rgb;
 
                     // Main Light
-                    half3 finalColor = ambient + DirectLightBP(mainLight, normalWS, viewDirWS);
+                    half3 finalColor = ambient + DirectLightBP(mainLight, normalWS, viewDirWS, albedo);
 
                     // Additional Light
                     int pixelLightCount = GetAdditionalLightsCount();
                     for (int i = 0; i < pixelLightCount; ++i)
                     {
                         Light addLight = GetAdditionalLight(i, input.positionWS);
-                        finalColor += DirectLightBP(addLight, normalWS, viewDirWS);
+                        finalColor += DirectLightBP(addLight, normalWS, viewDirWS, albedo);
                     }
 
                     return half4(finalColor, baseMap.a * _AlphaScale);
