@@ -2,171 +2,150 @@ Shader "Custom/ShaderBase/Standard/BumpedDiffuse"
 {
     Properties
     {
-        _Color ("Color", Color) = (1,1,1,1)
-        _MainTex ("Albedo (RGB)", 2D) = "white" {}
-        _NormalMap ("Normal Map", 2D) = "bump" {}
+        _BaseColor("Base Color", Color) = (1,1,1,1)
+        _BaseMap("Albedo (RGB)", 2D) = "white" {}
+        [Normal] _NormalMap("Normal Map", 2D) = "bump" {}
+        // "bump"默认颜色(0.5, 0.5, 1.0)  解压后法线向量(0, 0, 1)  视觉效果：平滑、圆润（正常）  "normal"可能为 (1, 1, 1) 或其他    解压后法线向量(1, 1, 1)或偏差值    视觉效果拉伸、扭曲、断裂
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
-
-        Pass {
-            Tags { "LightMode"="ForwardBase" }
-
-            CGPROGRAM
-
-            #pragma multi_compile_fwdbase
-
-            #pragma vertex vert
-            #pragma fragment frag
-
-            #include "Lighting.cginc"
-            #include "AutoLight.cginc"
-
-            fixed4 _Color;
-            sampler2D _MainTex;
-            float4 _MainTex_ST;
-            sampler2D _NormalMap;
-            float4 _NormalMap_ST;
-
-            struct a2v {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                float4 tangent : TANGENT;
-                float4 texcoord : TEXCOORD0;
-            };
-
-            struct v2f {
-                float4 pos : SV_POSITION;
-                float4 uv : TEXCOORD0;
-                float4 TtoW0 : TEXCOORD1;
-                float4 TtoW1 : TEXCOORD2;
-                float4 TtoW2 : TEXCOORD3;
-                SHADOW_COORDS(4)
-            };
-
-            v2f vert(a2v v) {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-
-                o.uv.xy = v.texcoord.xy * _MainTex_ST.xy + _MainTex_ST.zw;
-                o.uv.zw = v.texcoord.xy * _NormalMap_ST.xy + _NormalMap_ST.zw;
-
-                float3 worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                fixed3 worldNormal = UnityObjectToWorldNormal(v.normal);
-                fixed3 worldTangent = UnityObjectToWorldDir(v.tangent.xyz);
-                fixed3 worldBinormal = cross(worldNormal, worldTangent) * v.tangent.w;
-
-                o.TtoW0 = float4(worldTangent.x, worldBinormal.x, worldNormal.x, worldPos.x);
-                o.TtoW1 = float4(worldTangent.y, worldBinormal.y, worldNormal.y, worldPos.y);
-                o.TtoW2 = float4(worldTangent.z, worldBinormal.z, worldNormal.z, worldPos.z);
-
-                TRANSFER_SHADOW(o);
-
-                return o;
-            }
-
-            fixed4 frag(v2f i) : SV_Target {
-                float3 worldPos = float3(i.TtoW0.w, i.TtoW1.w, i.TtoW2.w);
-                fixed3 lightDir = normalize(UnityWorldSpaceLightDir(worldPos));
-                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(worldPos));
-
-                fixed3 bump = UnpackNormal(tex2D(_NormalMap, i.uv.zw));
-                bump = normalize(half3(dot(i.TtoW0.xyz, bump), dot(i.TtoW1.xyz, bump), dot(i.TtoW2.xyz, bump)));
-
-                fixed3 albedo = tex2D(_MainTex, i.uv.xy).rgb * _Color.rgb;
-
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz * albedo;
-
-                fixed3 diffuse = _LightColor0.rgb * albedo * max(0, dot(bump, lightDir));
-
-                UNITY_LIGHT_ATTENUATION(atten, i, worldPos);
-
-                return fixed4(ambient + diffuse * atten, 1.0);
-            }
-
-            ENDCG
+        Tags
+        { 
+            "RenderType" = "Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+            "Queue"="Geometry"
         }
 
-        Pass {
-            Tags { "LightMode"="ForwardAdd" }
+        HLSLINCLUDE
 
-            Blend One One
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            CGPROGRAM
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseColor;
+                float4 _BaseMap_ST;
+            CBUFFER_END
 
-            #pragma multi_compile_fwdadd
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_NormalMap);
+            SAMPLER(sampler_NormalMap);
 
-            #pragma vertex vert
-            #pragma fragment frag
-
-            #include "Lighting.cginc"
-            #include "AutoLight.cginc"
-
-            fixed4 _Color;
-            sampler2D _MainTex;
-            float4 _MainTex_ST;
-            sampler2D _NormalMap;
-            float4 _NormalMap_ST;
-
-            struct a2v {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                float4 tangent : TANGENT;
-                float4 texcoord : TEXCOORD0;
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float2 uv : TEXCOORD0;
+                float3 normalOS : NORMAL;
+                float4 tangentOS : TANGENT;
             };
 
-            struct v2f {
-                float4 pos : SV_POSITION;
-                float4 uv : TEXCOORD0;
-                float4 TtoW0 : TEXCOORD1;
-                float4 TtoW1 : TEXCOORD2;
-                float4 TtoW2 : TEXCOORD3;
-                SHADOW_COORDS(4)
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
+                float3 normalWS : TEXCOORD2;
+                float4 tangentWS : TEXCOORD3; // xyz: tangentWS, w: bitangent sign
             };
 
-            v2f vert(a2v v) {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
+            Varyings vert(Attributes input)
+            {
+                Varyings output = (Varyings)0;
 
-                o.uv.xy = v.texcoord.xy * _MainTex_ST.xy + _MainTex_ST.zw;
-                o.uv.zw = v.texcoord.xy * _NormalMap_ST.xy + _NormalMap_ST.zw;
+                // Position
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+                output.positionCS = vertexInput.positionCS;
+                output.positionWS = vertexInput.positionWS;
 
-                float3 worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                fixed3 worldNormal = UnityObjectToWorldNormal(v.normal);
-                fixed3 worldTangent = UnityObjectToWorldDir(v.tangent.xyz);
-                fixed3 worldBinormal = cross(worldNormal, worldTangent) * v.tangent.w;
+                // Normal
+                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS, input.tangentOS);
+                output.normalWS = normalInput.normalWS;
+                output.tangentWS = float4(normalInput.tangentWS, input.tangentOS.w);
+                
+                // UV
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
 
-                o.TtoW0 = float4(worldTangent.x, worldBinormal.x, worldNormal.x, worldPos.x);
-                o.TtoW1 = float4(worldTangent.y, worldBinormal.y, worldNormal.y, worldPos.y);
-                o.TtoW2 = float4(worldTangent.z, worldBinormal.z, worldNormal.z, worldPos.z);
-
-                TRANSFER_SHADOW(o);
-
-                return o;
+                return output;
             }
 
-            fixed4 frag(v2f i) : SV_Target {
-                float3 worldPos = float3(i.TtoW0.w, i.TtoW1.w, i.TtoW2.w);
-                fixed3 lightDir = normalize(UnityWorldSpaceLightDir(worldPos));
-                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(worldPos));
+            half3 DirectLightLambert(Light light, half3 normalWS, half3 albedo)
+            {
+                half3 lightDirWS = normalize(light.direction);
 
-                fixed3 bump = UnpackNormal(tex2D(_NormalMap, i.uv.zw));
-                bump = normalize(half3(dot(i.TtoW0.xyz, bump), dot(i.TtoW1.xyz, bump), dot(i.TtoW2.xyz, bump)));
+                // Diffuse
+                float diff = saturate(dot(normalWS, lightDirWS));
+                half3 diffuse = light.color * albedo * diff;
 
-                fixed3 albedo = tex2D(_MainTex, i.uv.xy).rgb * _Color.rgb;
+                half3 lambert = diffuse * light.distanceAttenuation * light.shadowAttenuation;
 
-                fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz * albedo;
-
-                fixed3 diffuse = _LightColor0.rgb * albedo * max(0, dot(bump, lightDir));
-
-                UNITY_LIGHT_ATTENUATION(atten, i, worldPos);
-
-                return fixed4(ambient + diffuse * atten, 1.0);
+                return lambert;
             }
 
-            ENDCG
+        ENDHLSL
+
+        Pass
+        {
+            Name "ForwardLit"
+            Tags { "LightMode" = "UniversalForward" }
+
+            HLSLPROGRAM
+
+                #pragma vertex vert
+                #pragma fragment frag
+
+                // Variant Keywords
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE // 无阴影/普通阴影/级联阴影
+                #pragma multi_compile _ _ADDITIONAL_LIGHTS // 像素级附加光照开关
+                #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS // 附加光源阴影开关
+                #pragma multi_compile _ _SHADOWS_SOFT // 阴影平滑开关
+             
+                half4 frag(Varyings input) : SV_Target
+                {
+                    // Light Info
+                    float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                    #if defined(_MAIN_LIGHT_SHADOWS_CASCADE)
+                        shadowCoord.w = ComputeCascadeIndex(input.positionWS);
+                    #endif
+                    Light mainLight = GetMainLight(shadowCoord);
+
+                    // Texture Info
+                    half4 albedoMap = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
+                    half4 normalMap = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv);
+                    
+                    // Normlize Vector
+                    // TBN
+                    float3 n = normalize(input.normalWS);
+                    float3 t = normalize(input.tangentWS.xyz);
+                    float3 b = cross(n, t) * input.tangentWS.w;
+                    float3x3 TBN = float3x3(t, b, n);
+                    
+                    half3 normalTS = UnpackNormal(normalMap);
+                    half3 normalWS = normalize(mul(normalTS, TBN));
+
+                    // Albedo
+                    half3 albedo = albedoMap.rgb * _BaseColor.rgb;
+
+                    // Ambient
+                    half3 ambient = SampleSH(normalWS) * albedo;
+
+                    // Main Light
+                    half3 finalColor = ambient + DirectLightLambert(mainLight, normalWS, albedo);
+
+                    // Additional Light
+                    int pixelLightCount = GetAdditionalLightsCount();
+                    for (int i = 0; i < pixelLightCount; ++i)
+                    {
+                        Light addLight = GetAdditionalLight(i, input.positionWS);
+                        finalColor += DirectLightLambert(addLight, normalWS, albedo);
+                    }
+
+                    return half4(finalColor, albedoMap.a);
+                }
+            
+            ENDHLSL
         }
     }
-    FallBack "Diffuse"
+    FallBack "Hidden/Universal Render Pipeline/FallbackError"
+    //项目中用
+    //FallBack "Universal Render Pipeline/Lit"
 }
