@@ -144,6 +144,8 @@ Shader "Custom/ShaderBase/Standard/BumpedDiffuse"
             
             ENDHLSL
         }
+
+        UsePass "Universal Render Pipeline/Lit/ShadowCaster"
     }
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
     //项目中用

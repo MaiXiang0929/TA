@@ -154,6 +154,8 @@ Shader "Custom/ShaderBase/Standard/BumpedSpecular"
 
             ENDHLSL
         }
+
+        UsePass "Universal Render Pipeline/Lit/ShadowCaster"
     }
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
     //项目中用
