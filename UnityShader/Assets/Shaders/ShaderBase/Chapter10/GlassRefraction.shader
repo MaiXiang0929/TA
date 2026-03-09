@@ -2,12 +2,17 @@ Shader "Custom/ShaderBase/Chapter10/GlassRefraction"
 {
     Properties
     {
-        _BaseMap ("Base Map", 2D) = "white" {}
+        _BaseMap("Base Map", 2D) = "white" {}
         _BumpMap("Normal Map", 2D) = "bump" {}
         _Cubemap("Environment Cubemap", Cube) = "_Skybox" {}
 
+        [Header(Refraction)]
         _Distortion("Distortion", Range(0, 10)) = 10
         _IOR("Index of Refraction", Range(1.0, 2.0)) = 1.5
+
+        [Header(Beer Lambert Law)]
+        _Thickness("Thickness", Range(0, 5)) = 0.5
+        _TargetColor("Target Color", Color) = (1.0, 1.0, 1.0, 1.0)
     }
 
     SubShader
@@ -26,6 +31,8 @@ Shader "Custom/ShaderBase/Chapter10/GlassRefraction"
             CBUFFER_START(UnityPerMaterial)
                 float _Distortion;
                 float _IOR;
+                float _Thickness;
+                float4 _TargetColor;
             CBUFFER_END
 
             TEXTURE2D(_BaseMap);
@@ -119,10 +126,18 @@ Shader "Custom/ShaderBase/Chapter10/GlassRefraction"
                     float3 refractDirVS = TransformWorldToViewDir(refractDirWS);
                     float2 screenUV = input.screenPos.xy / input.screenPos.w;
 
-                    float2 offset = refractDirVS.xy * _Distortion * 0.01;
+                    float2 offset = refractDirVS.xy * _Distortion * _Thickness * 0.01;
                     screenUV += offset;
 
                     half3 refractColor = SAMPLE_TEXTURE2D(_CameraOpaqueTexture, sampler_CameraOpaqueTexture, screenUV).rgb;
+                    // Beer-Lambert
+                    // 路径长度修正：视角越斜，路径越长
+                    float cosRefract = saturate(dot(normalWS, -refractDirWS));
+                    float rayDistance = _Thickness / (cosRefract + 0.0001); // 防止除以零导致的数学崩溃
+                    
+                    // 计算吸收后的颜色强度 _Absorption 颜色越深，exp(-x) 衰减越快
+                    half3 transmission = exp(-( (1.0 - _TargetColor.rgb) * _Thickness ));
+                    refractColor *= transmission;
 
                     // Reflection
                     half3 reflectDirWS = reflect(-viewDirWS, normalWS);
