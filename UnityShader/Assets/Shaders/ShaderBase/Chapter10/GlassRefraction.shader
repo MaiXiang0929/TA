@@ -128,9 +128,10 @@ Shader "Custom/ShaderBase/Chapter10/GlassRefraction"
                     half3 reflectDirWS = reflect(-viewDirWS, normalWS);
                     half3 reflectColor = SAMPLE_TEXTURECUBE(_Cubemap, sampler_Cubemap, reflectDirWS).rgb;
 
-                    // Fresnel
-                    float fres = pow(1-saturate(dot(normalWS, viewDirWS)), 5);
-                    float fresnel = pow(1 - saturate(dot(viewDirWS, normalWS)), 5); 
+                    // Fresnel(Schlick)
+                    float f0 = pow((1.0 - _IOR) / (1.0 + _IOR), 2);
+                    float cosTheta = saturate(dot(normalWS, viewDirWS));
+                    float fresnel = f0 + (1.0 - f0) * pow(1.0 - cosTheta, 5.0);
                     
                     // Merge Color
                     half3 finalColor = lerp(refractColor, reflectColor, fresnel);
