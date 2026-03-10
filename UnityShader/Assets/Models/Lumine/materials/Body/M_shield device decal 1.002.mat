@@ -25,6 +25,7 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
+  - _USE_LIGHTMAP_AO
   - _USE_OUTLINE
   - _USE_RAMP_SHADOW
   - _USE_RIM
@@ -129,6 +130,8 @@ Material:
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
+    - _MetalIntensity: 1
+    - _MetalShininess: 256
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1
@@ -153,7 +156,7 @@ Material:
     - _SrcBlendAlpha: 1
     - _Surface: 0
     - _UVSec: 0
-    - _UseLightMapAO: 0
+    - _UseLightMapAO: 1
     - _UseOutline: 1
     - _UseRampShadow: 1
     - _UseRampShadow2: 1

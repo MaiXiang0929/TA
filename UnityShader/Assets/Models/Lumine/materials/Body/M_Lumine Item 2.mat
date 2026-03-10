@@ -138,7 +138,7 @@ Material:
     - _RimPower: 4
     - _RimThreshold: 0.5
     - _ShadowPosition: 0.54
-    - _ShadowRampWidth: 12.21
+    - _ShadowRampWidth: 5.9
     - _ShadowSoftness: 0.62
     - _Shininess: 32
     - _Smoothness: 0.5
