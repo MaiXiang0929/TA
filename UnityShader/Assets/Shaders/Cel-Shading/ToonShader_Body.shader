@@ -52,25 +52,11 @@ Shader "Cel-Shading/ToonBody"
         }
 
         HLSLINCLUDE // 公共代码块
-        
-            #pragma multi_compile _MAIN_LIGHT_SHADOWS // 主光源阴影
-            #pragma multi_compile _MAIN_LIGHT_SHADOWS_CASCADE // 主光源阴影级联
-            #pragma multi_compile _MAIN_LIGHT_SHADOWS_SCREEN // 主光源阴影屏幕空间
-
-            #pragma multi_compile_fragment _LIGHT_LAYERS // 光照层
-            #pragma multi_compile_fragment _LIGHT_COOKIES // 光照饼干
-            #pragma multi_compile_fragment _SCREEN_SPACE_OCCLUSION // 屏幕空间遮挡
-            #pragma multi_compile_fragment _ADDITIONAL_LIGHT_SHADOWS // 额外光源阴影
-            #pragma multi_compile_fragment _SHADOWS_SOFT // 阴影软化
-
-            #pragma shader_feature_local _USE_LIGHTMAP_AO // A0开关
-            #pragma shader_feature_local _USE_RAMP_SHADOW // 色阶阴影开关
-            #pragma shader_feature_local _USE_SPECULAR // 高光开关
-            #pragma shader_feature_local _USE_RIM // 轮廓光开关
-            #pragma shader_feature_loca _USE_OUTLINE // 描边开关
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl" // 核心库
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl" // 光照库
+
+            #pragma multi_compile_instancing // 启用GPU实例化编译
 
             CBUFFER_START(UnityPerMaterial) // 每材质常量缓冲区开始
 
@@ -110,7 +96,30 @@ Shader "Cel-Shading/ToonBody"
             TEXTURE2D(_RampTex);
             SAMPLER(sampler_RampTex);
 
-            
+            half3 CalculateCelAdditionalLight(Light light, half3 N, half3 V, half3 baseColor, float metalMask)
+            {
+                // 计算光照分量
+                half3 L = normalize(light.direction);
+                half3 H = normalize(L + V);
+                half NoL = dot(N, L);
+                half NoH = saturate(dot(N, H));
+                
+                // 衰减系数 (距离衰减 * 阴影衰减)
+                half attenuation = light.distanceAttenuation * light.shadowAttenuation;
+                
+                // 附加光漫反射 (卡通化)
+                half diffStep = smoothstep(0.4, 0.45, NoL * 0.5 + 0.5);
+                half3 diffuse = diffStep * baseColor;
+                
+                //  附加光高光 (卡通化)
+                float specBase = pow(NoH, _Shininess);
+                float specStep = smoothstep(_SpecularThreshold, _SpecularThreshold + _SpecularSoftness, specBase);
+                half3 specColor = lerp(_SpecularColor.rgb, baseColor * _MetalIntensity, metalMask);
+                half3 specular = specStep * specColor;
+
+                // 综合光照颜色
+                return (diffuse + specular) * light.color * attenuation;
+            }
         
             // 官方版本的RampShadowID函数
             float RampShadowID(float input, float useShadow2, float useShadow3, float useShadow4, float useShadow5, 
@@ -212,6 +221,25 @@ Shader "Cel-Shading/ToonBody"
 
             HLSLPROGRAM // 着色器程序
                 
+                // Main Light
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS // 主光源阴影
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE // 主光源阴影级联
+                #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_SCREEN // 主光源阴影屏幕空间
+                // Additional Light
+                #pragma multi_compile _ _ADDITIONAL_LIGHTS            // 支持点光源/聚光灯
+                #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS // 额外光源阴影
+                // Rendering Feature
+                #pragma multi_compile_fragment _LIGHT_LAYERS // 光照层
+                #pragma multi_compile_fragment _LIGHT_COOKIES // 光照饼干
+                #pragma multi_compile_fragment _SCREEN_SPACE_OCCLUSION // 屏幕空间遮挡
+                #pragma multi_compile_fragment _SHADOWS_SOFT // 阴影软化   
+                
+                #pragma shader_feature_local _USE_LIGHTMAP_AO // A0开关
+                #pragma shader_feature_local _USE_RAMP_SHADOW // 色阶阴影开关
+                #pragma shader_feature_local _USE_SPECULAR // 高光开关
+                #pragma shader_feature_local _USE_RIM // 轮廓光开关
+                #pragma shader_feature_loca _USE_OUTLINE // 描边开关
+
                 #pragma vertex MainVertexShader // 顶点着色器入口
                 #pragma fragment MainFragmentShader // 片元着色器入口
                 
@@ -260,7 +288,8 @@ Shader "Cel-Shading/ToonBody"
                 // 片元着色器
                 half4 MainFragmentShader(Varyings input) : SV_TARGET
                 {
-                    Light light = GetMainLight();
+                    float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                    Light light = GetMainLight(shadowCoord);
                     half4 vertexColor = input.color;
 
                     // Normalize Vector
@@ -276,12 +305,14 @@ Shader "Cel-Shading/ToonBody"
                     half4 baseMap = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv0);
                     half4 lightMap = SAMPLE_TEXTURE2D(_LightMap,sampler_LightMap, input.uv0);
 
-                    // Lambert
-                    half lambert = NoL; // Lambert (-1, 1)
-                    half halflambert = lambert * 0.5 + 0.5; // Half lambert (0, 1)
+                    // Half Lambert
+                    half halflambert = NoL * 0.5 + 0.5; // Half lambert (0, 1)
                     halflambert *= pow(halflambert, 2);
-                    half lambertstep = smoothstep(0.01, 0.4, halflambert);
-                    half shadowFactor = lerp(0, halflambert, lambertstep);
+                    // 实时阴影乘入光照项
+                    half shadowAttenuation = light.shadowAttenuation;
+                    half combinedLight = halflambert * shadowAttenuation; 
+                    half lambertstep = smoothstep(0.01, 0.4, combinedLight);
+                    half shadowFactor = lerp(0, combinedLight, lambertstep);
 
                     // AO
                     #if _USE_LIGHTMAP_AO
@@ -289,9 +320,11 @@ Shader "Cel-Shading/ToonBody"
                     #else
                         half ambient = halflambert;
                     #endif
-                    half shadow = (ambient + halflambert) * 0.5; // 环境光遮蔽
+                    
+                    half shadow = (ambient + combinedLight) * 0.5; // 环境光遮蔽
                     shadow = lerp(shadow, 1, step(0.95, ambient));
                     shadow = lerp(shadow, 0, step(ambient,0.05));
+
                     half isShadowArea = step(shadow, _ShadowPosition);
                     half shadowDepth = saturate((_ShadowPosition - shadow) / _ShadowPosition);
                     shadowDepth = pow(shadowDepth, _ShadowSoftness);
@@ -300,7 +333,7 @@ Shader "Cel-Shading/ToonBody"
                     half shadowPosition = (_ShadowPosition - shadowFactor) / _ShadowPosition;
 
                     // Ramp
-                    half rampU = 1 - saturate(shadowDepth / rampWidthFactor);
+                    half rampU = 1 - saturate(shadowDepth / max(0.001, rampWidthFactor));
                     half rampID = RampShadowID(lightMap.a, _UseRampShadow2, _UseRampShadow3, _UseRampShadow4, _UseRampShadow5, 1, 2, 3, 4, 5);
                     half rampV = 0.45 - (rampID - 1) * 0.1;
                     half2 rampDayUV = half2(rampU, rampV + 0.5);
@@ -313,7 +346,7 @@ Shader "Cel-Shading/ToonBody"
                     #if _USE_RAMP_SHADOW
                         half3 finalColor = baseMap.rgb * rampColor * (isShadowArea ? 1 : 1.2);
                     #else
-                        half3 finalColor = baseMap.rgb * halflambert * (shadow + 0.2);
+                        half3 finalColor = baseMap.rgb * combinedLight * (shadow + 0.2);
                     #endif
 
                     // Specular
@@ -357,6 +390,21 @@ Shader "Cel-Shading/ToonBody"
                     finalColor += finalSpecular;
                     finalColor += rimLight;
 
+                    // Additional Light 
+                    #if defined(_ADDITIONAL_LIGHTS)
+                        // 获取当前像素受影响的附加光数量
+                        uint pixelLightCount = GetAdditionalLightsCount();
+                        
+                        for (uint lightIndex = 0u; lightIndex < pixelLightCount; ++lightIndex)
+                        {
+                            // 获取附加光信息
+                            Light addLight = GetAdditionalLight(lightIndex, input.positionWS, shadowCoord);
+                            
+                            // 累加附加光贡献
+                            finalColor += CalculateCelAdditionalLight(addLight, N, V, baseMap.rgb, lightMap.r);
+                        }
+                    #endif
+
                     return float4(finalColor, 1);
                 }
                 
@@ -378,7 +426,6 @@ Shader "Cel-Shading/ToonBody"
 
             HLSLPROGRAM
 
-                #pragma multi_compile_instancing // 启用GPU实例化编译
                 #pragma multi_compile _ DOTS_INSTANCING_ON // 启用DOTS实例化编译
                 #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW // 启用点光源阴影
 
