@@ -3,51 +3,95 @@ Shader "Custom/ShaderBase/Chapter11/ImageSequenceAnimation"
     Properties
     {
         _Color ("Color", Color) = (1,1,1,1)
-        _MainTex ("Albedo (RGB)", 2D) = "white" {}
-        _Glossiness ("Smoothness", Range(0,1)) = 0.5
-        _Metallic ("Metallic", Range(0,1)) = 0.0
+        _BaseMap ("Albedo (RGB)", 2D) = "white" {}
+        _HorizontalAmount ("Horizontal Amount", Float) = 4
+        _VerticalAmount ("Vertical Amount", Float) = 4
+        _Speed ("Speed", Range(0, 100)) = 30
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
-        LOD 200
-
-        CGPROGRAM
-        // Physically based Standard lighting model, and enable shadows on all light types
-        #pragma surface surf Standard fullforwardshadows
-
-        // Use shader model 3.0 target, to get nicer looking lighting
-        #pragma target 3.0
-
-        sampler2D _MainTex;
-
-        struct Input
+        Tags
         {
-            float2 uv_MainTex;
-        };
-
-        half _Glossiness;
-        half _Metallic;
-        fixed4 _Color;
-
-        // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
-        // See https://docs.unity3d.com/Manual/GPUInstancing.html for more information about instancing.
-        // #pragma instancing_options assumeuniformscaling
-        UNITY_INSTANCING_BUFFER_START(Props)
-            // put more per-instance properties here
-        UNITY_INSTANCING_BUFFER_END(Props)
-
-        void surf (Input IN, inout SurfaceOutputStandard o)
-        {
-            // Albedo comes from a texture tinted by color
-            fixed4 c = tex2D (_MainTex, IN.uv_MainTex) * _Color;
-            o.Albedo = c.rgb;
-            // Metallic and smoothness come from slider variables
-            o.Metallic = _Metallic;
-            o.Smoothness = _Glossiness;
-            o.Alpha = c.a;
+            "RenderType" = "Transparent"
+            "RenderPipeline" = "UniversalPipeline"
+            "Queue" = "Transparent"
         }
-        ENDCG
+
+        HLSLINCLUDE
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseMap_ST;
+                float4 _Color;
+                float _HorizontalAmount;
+                float _VerticalAmount;
+                float _Speed;
+            CBUFFER_END
+
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_linear_repeat);
+        ENDHLSL
+        
+        Pass
+        {
+            Tags{ "LightMode" = "UniversalForward" }
+
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
+
+            HLSLPROGRAM
+
+                #pragma vertex vert;
+                #pragma fragment frag;
+
+                struct Attributes
+                {
+                    float4 positionOS : POSITION;
+                    float2 uv : TEXCOORD0;
+                };
+
+                struct Varyings
+                {
+                    float4 positionCS : SV_POSITION;
+                    float2 uv : TEXCOORD0; 
+                };
+
+                Varyings vert(Attributes input)
+                {
+                    Varyings output = (Varyings)0;
+
+                    output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                    output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+
+                    return output;
+                }
+
+                half4 frag(Varyings input) : SV_Target
+                {
+                    // 计算总时间及当前帧索引
+                    float time = floor(_Time.y * _Speed);
+                    float row = floor(time / _HorizontalAmount);
+                    float column = fmod(time, _HorizontalAmount);
+
+                    // 缩放UV
+                    half2 uv = input.uv;
+                    uv.x /= _HorizontalAmount;
+                    uv.y /= _VerticalAmount;
+
+                    // 偏移UV到正确的帧位置
+                    //序列帧通常从左上角开始
+                    uv.x += column / _HorizontalAmount;
+                    uv.y -= row / _VerticalAmount;
+
+                    half4 c = SAMPLE_TEXTURE2D(_BaseMap, sampler_linear_repeat, uv);
+                    c.rgb *= _Color;
+
+                    return c;
+                }
+
+            ENDHLSL
+        }
     }
-    FallBack "Diffuse"
+    Fallback "Hidden/Universal Render Pipeline/FallbackError"
+    // Fallback "Unlit/Texture"
 }
