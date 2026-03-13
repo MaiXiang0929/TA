@@ -130,4 +130,13 @@ public class ProceduralTextureGeneration : MonoBehaviour
     {
         return Color.Lerp(c1, c2, t);
     }
+
+    void Update()
+    {
+        // 如果是编辑模式，且材质丢失了纹理，重新赋一遍值
+        if (!Application.isPlaying && material != null && material.GetTexture("_MainTex") == null)
+        {
+            _UpdateMaterial();
+        }
+    }
 }

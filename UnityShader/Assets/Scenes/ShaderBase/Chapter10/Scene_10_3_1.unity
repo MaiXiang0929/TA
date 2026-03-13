@@ -361,7 +361,7 @@ MonoBehaviour:
   material: {fileID: 2100000, guid: a648e1ab45237b14a98c86dc51301c06, type: 2}
   m_textureWidth: 512
   m_backgroundColor: {r: 1, g: 1, b: 1, a: 1}
-  m_circleColor: {r: 1, g: 0.015686274, b: 0.102086045, a: 1}
+  m_circleColor: {r: 0.0213892, g: 1, b: 0.015686274, a: 1}
   m_blurFactor: 2
 --- !u!1 &2124591951
 GameObject:
